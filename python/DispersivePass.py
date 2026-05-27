@@ -3,17 +3,27 @@ import matplotlib.pyplot as plt
 
 
 '''''''''''''''''''''''''''''''''''''''''''''Hadamard Mask'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-# import CodedAperture as CA
-# M = CA.HadamardMask(64, 64)
-# M.ApertureFunction()
-# S = CA.Shuffled(M.Tx)
-# S.Shuffle()
-# S.AperturePlot()
-# import DispersivePass as DP
-# P = DP.Dispersion(S.Tx, 4, 64*4)
-# P.ApplySourceSpectrum([1])
-# P.Plotting(P.DispersionPattern, 'Coded Aperture Simulation')
-# P.Plotting(P.SourceSpreadFunction, 'Incident Spectrum')
+import HelperFunction as HF
+fp = HF.Dialog.SelectFile()
+
+img = HF.FileProcessing.readpng(fp)
+HF.FileProcessing.showimg(img)
+
+import CodedAperture as CA
+M = CA.HadamardMask(2048, 2048)
+M.ApertureFunction()
+M.AperturePlot()
+S = CA.Shuffled(M.Tx)
+S.Shuffle()
+S.Tx = S.Tx[int((S.Tx.shape[0] - img.shape[0])/2) : int((S.Tx.shape[0] + img.shape[0])/2), int((S.Tx.shape[1] - img.shape[1])/2) : int((S.Tx.shape[1] + img.shape[1])/2)]
+S.AperturePlot()
+
+import DispersivePass as DP
+ApertureConst = 4
+P = DP.Dispersion(S.Tx, ApertureConst, img.shape[2])
+DispersionPTN = P.CalcDispersionPattern(P.ApplySourceCube(img))
+P.Plotting(DispersionPTN, 'Coded Aperture Simulation')
+P.Plotting(img, 'Incident Cube')
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
 '''''''''''''''''''''''''''''''''''''''''Row Doubled Hadamard Mask''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -27,49 +37,31 @@ import matplotlib.pyplot as plt
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
 
-
 class Dispersion:
 
-    def __init__(self, Aperture, ApertureConst, CameraRes):
-        [self.Aperture, self.ApertureConst, self.CameraRes] = [Aperture, ApertureConst, CameraRes]
+    def __init__(self, Aperture, ApertureConst, NumChannel):
+        [self.Aperture, self.ApertureConst, self.NumChannel] = [Aperture, ApertureConst, NumChannel]
 
-        self.ApertureOrder = self.Aperture.__len__()
-        self.SpreadFunction = self.CalcSpreadFunction()
-        self.DispersionPattern = self.CalcDispersionPattern()
+        self.ApertureHeight, self.ApertureWidth = self.Aperture.shape
+        self.CameraRes = (self.ApertureHeight, self.ApertureWidth + self.ApertureConst*(self.NumChannel - 1))
 
-    def CalcSpreadFunction(self):
+    def CalcDispersionPattern(self, MaskedScene):
 
-        temp = np.ones((self.ApertureOrder, self.CameraRes))
-        return np.array([[n if self.ApertureConst*k <= i else 0 for i, n in enumerate(row)] for k, row in enumerate(temp)])
+        temp = np.zeros(self.CameraRes)
+        for k in range(self.NumChannel):
+            temp[:, k * self.ApertureConst: self.ApertureWidth + k * self.ApertureConst] += MaskedScene[:, :, k]
+        return temp
 
-    def CalcDispersionPattern(self):
+    def ApplySourceCube(self, SourceCube):
 
-        return np.dot(self.Aperture, self.SpreadFunction)
-
-    def ApplySourceSpectrum(self, SourceSpectralPos):
-
-        t = int(max(self.ApertureOrder, self.CameraRes))
-        self.SourceSpreadFunction = np.zeros((self.ApertureConst*t, self.ApertureConst*t))
-        for n in SourceSpectralPos:
-            k = self.CameraRes - n
-
-            for c in range(self.ApertureConst):
-                self.SourceSpreadFunction[np.arange(k), self.ApertureConst*(np.arange(k) + n) + c] += 1
-
-        self.SourceSpreadFunction = self.SourceSpreadFunction[:self.ApertureOrder, :self.CameraRes]
-
-        self.DispersionPattern = np.dot(self.Aperture, self.SourceSpreadFunction)
-
-        self.IncidentSpectrum = np.zeros((self.ApertureOrder, self.CameraRes))
-        for n in SourceSpectralPos:
-            for c in range(self.ApertureConst):
-                self.IncidentSpectrum[:, self.ApertureConst*n + c] += 1
+        MaskedScene = SourceCube * self.Aperture[:, :, np.newaxis]
+        return MaskedScene
 
     def Plotting(self, x, title):
 
         fig = plt.figure()
         ax = fig.subplots()
-        cx = ax.imshow((np.abs(x)), cmap='gist_gray', origin='lower', vmin=0, vmax=1, alpha=1)
+        cx = ax.imshow((np.abs(x)), cmap='gist_gray', origin='lower', vmin=0, alpha=1)
         self.forceAspect(ax)
         ax.set_title(title, fontsize=30)
         cbar = fig.colorbar(cx, ax=ax)
