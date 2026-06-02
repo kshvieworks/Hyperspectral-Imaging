@@ -50,7 +50,9 @@ class Shuffled:
 
     def Shuffle(self):
 
-        np.random.shuffle(self.Tx)
+        rng =np.random.default_rng()
+        rng.shuffle(self.Tx, axis=-1)
+        rng.shuffle(self.Tx, axis=-2)
 
     def AperturePlot(self):
         fig = plt.figure()

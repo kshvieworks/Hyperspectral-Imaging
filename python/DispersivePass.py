@@ -57,18 +57,25 @@ class Dispersion:
         MaskedScene = SourceCube * self.Aperture[:, :, np.newaxis]
         return MaskedScene
 
-    def Plotting(self, x, title):
 
-        fig = plt.figure()
-        ax = fig.subplots()
-        cx = ax.imshow((np.abs(x)), cmap='gist_gray', origin='lower', vmin=0, alpha=1)
-        self.forceAspect(ax)
-        ax.set_title(title, fontsize=30)
-        cbar = fig.colorbar(cx, ax=ax)
-        cbar.ax.tick_params(labelsize=15)
+class MultiShotDispersion:
+    def __init__(self, ApertureList, ApertureConst, NumChannel):
+        [self.ApertureList, self.ApertureConst, self.NumChannel] = [ApertureList, ApertureConst, NumChannel]
+        self.NumShots = len(ApertureList)
+        self.ApertureHeight, self.ApertureWidth = self.ApertureList[0].shape
+        self.CameraRes = (self.ApertureHeight, self.ApertureWidth + self.ApertureConst*(self.NumChannel - 1))
 
+    def CalcDispersionPattern(self, MaskedSceneList):
+        DispersionPatterns = []
 
-    def forceAspect(self, ax, aspect=1):
-        im = ax.get_images()
-        extent = im[0].get_extent()
-        ax.set_aspect(abs((extent[1] - extent[0]) / (extent[3] - extent[2])) / aspect)
+        for MaskedScene in MaskedSceneList:
+            temp = np.zeros(self.CameraRes)
+            for k in range(self.NumChannel):
+                temp[:, k * self.ApertureConst: self.ApertureWidth + k * self.ApertureConst] += MaskedScene[:, :, k]
+            DispersionPatterns.append(temp)
+        return DispersionPatterns
+
+    def ApplySourceCube(self, SourceCube):
+
+        MaskedSceneList = [SourceCube * Aperture[:, :, np.newaxis] for Aperture in self.ApertureList]
+        return MaskedSceneList
